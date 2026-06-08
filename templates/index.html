@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Jarvis Mobile</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0f0f1a;
+  color: #e0e0e0;
+  padding: 12px;
+  min-height: 100vh;
+}
+.header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 0; border-bottom: 1px solid #2a2a3e; margin-bottom: 12px;
+}
+.header h1 { font-size: 18px; font-weight: 700; color: #fff; }
+.header h1 span { color: #888; font-weight: 400; font-size: 12px; }
+.header .time { font-size: 12px; color: #888; }
+.card {
+  background: #1a1a2e; border-radius: 10px; padding: 14px;
+  margin-bottom: 10px; border: 1px solid #2a2a3e;
+}
+.card-title { font-size: 13px; color: #888; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+.row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; }
+.row + .row { border-top: 1px solid #252540; }
+.label { font-size: 14px; color: #aaa; }
+.value { font-size: 14px; font-weight: 600; color: #fff; }
+.value.set { color: #4caf50; }
+.value.missing { color: #ff5252; }
+.value.unknown { color: #888; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.badge.ok { background: #1b3a1b; color: #4caf50; }
+.badge.warn { background: #3a2e1b; color: #ffc107; }
+.badge.err { background: #3a1b1b; color: #ff5252; }
+.badge.info { background: #1b2a3a; color: #64b5f6; }
+.worker-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
+.worker-item {
+  background: #22223a; border-radius: 6px; padding: 8px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.worker-name { font-size: 13px; font-weight: 600; }
+.worker-status { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.ws-online { background: #4caf50; }
+.ws-busy { background: #ffc107; }
+.ws-abnormal { background: #ff5252; }
+.ws-offline { background: #555; }
+.offline-banner {
+  background: #3a1b1b; color: #ff5252; text-align: center;
+  padding: 8px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  margin-bottom: 10px; display: none;
+}
+.report-item { font-size: 13px; padding: 4px 0; display: flex; gap: 6px; }
+.report-item + .report-item { border-top: 1px solid #252540; }
+.report-cat { font-size: 11px; padding: 1px 6px; border-radius: 3px; background: #2a2a4e; color: #888; white-space: nowrap; }
+.report-name { color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.footer { text-align: center; font-size: 11px; color: #555; padding: 16px 0 8px; }
+</style>
+</head>
+<body>
+
+<div class="offline-banner" id="offline-banner">本地 Jarvis 可能离线（超过 2 分钟未更新）</div>
+
+<div class="header">
+  <h1>Jarvis <span>Mobile</span></h1>
+  <span class="time" id="update-time">--:--:--</span>
+</div>
+
+<!-- Key Status -->
+<div class="card">
+  <div class="card-title">密钥状态</div>
+  <div class="row"><span class="label">DeepSeek</span><span class="value" id="key-deepseek">--</span></div>
+  <div class="row"><span class="label">MIMO</span><span class="value" id="key-mimo">--</span></div>
+</div>
+
+<!-- Bridge -->
+<div class="card">
+  <div class="card-title">微信桥</div>
+  <div class="row"><span class="label">状态</span><span class="value" id="bridge-status">--</span></div>
+  <div class="row"><span class="label">观察者</span><span class="value" id="bridge-watcher">--</span></div>
+  <div class="row"><span class="label">Outbox 待发</span><span class="value" id="outbox-pending">--</span></div>
+  <div class="row"><span class="label">已发送 / 失败</span><span class="value" id="outbox-sent-failed">--</span></div>
+</div>
+
+<!-- Workers -->
+<div class="card">
+  <div class="card-title">员工状态</div>
+  <div class="worker-grid" id="worker-grid"></div>
+</div>
+
+<!-- Alerts -->
+<div class="card">
+  <div class="card-title">告警</div>
+  <div class="row"><span class="label">Outbox 积压</span><span class="value" id="alert-outbox">--</span></div>
+  <div class="row"><span class="label">最近失败</span><span class="value" id="alert-failed">--</span></div>
+  <div class="row"><span class="label">最后发送</span><span class="value" id="alert-last-send">--</span></div>
+</div>
+
+<!-- Reports -->
+<div class="card">
+  <div class="card-title">最近报告</div>
+  <div id="report-list"></div>
+</div>
+
+<div class="footer">
+  Jarvis Mobile Web &middot; 只读面板 &middot; rc0
+</div>
+
+<script>
+const MINUTE = 60000;
+const OFFLINE_TIMEOUT = 2 * MINUTE;
+
+function fmtTime(iso) {
+  if (!iso) return '--:--:--';
+  const d = new Date(iso);
+  return d.toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+function fmtAgo(iso) {
+  if (!iso) return '--';
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < MINUTE) return '刚刚';
+  if (diff < 60 * MINUTE) return Math.floor(diff / MINUTE) + ' 分钟前';
+  return Math.floor(diff / (60 * MINUTE)) + ' 小时前';
+}
+
+function setText(id, text, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text || '--';
+  if (cls) { el.className = 'value ' + cls; }
+}
+
+function setBadge(id, text, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text || '--';
+  el.className = 'value';
+  if (cls) el.classList.add('badge', cls);
+}
+
+function workerDot(abnormal, busy) {
+  if (abnormal) return 'ws-abnormal';
+  if (busy) return 'ws-busy';
+  return 'ws-online';
+}
+
+function render(data) {
+  if (!data || data.status === 'waiting') {
+    document.getElementById('offline-banner').style.display = 'none';
+    return;
+  }
+
+  // Offline check
+  const received = data._received_at ? data._received_at * 1000 : 0;
+  const staleness = Date.now() - received;
+  const banner = document.getElementById('offline-banner');
+  banner.style.display = staleness > OFFLINE_TIMEOUT ? 'block' : 'none';
+
+  // Update time
+  document.getElementById('update-time').textContent = fmtTime(data.clock);
+
+  // Keys
+  const k = data.key || {};
+  setText('key-deepseek', k.deepseek || '--', (k.deepseek === 'SET' ? 'set' : k.deepseek === 'MISSING' ? 'missing' : ''));
+  setText('key-mimo', k.mimo || '--', (k.mimo === 'SET' ? 'set' : k.mimo === 'MISSING' ? 'missing' : ''));
+
+  // Bridge
+  const bd = data.bridge_detail || {};
+  setBadge('bridge-status', bd.watcher === 'RUNNING' ? '运行中' : '已停止', bd.watcher === 'RUNNING' ? 'ok' : 'err');
+  setText('bridge-watcher', bd.watcher || '--');
+  const ob = data.outbox || {};
+  setText('outbox-pending', String(ob.pending ?? '--'));
+  setText('outbox-sent-failed', (ob.sent ?? '--') + ' / ' + (ob.failed ?? '--'));
+
+  // Workers
+  const workers = data.workers || {};
+  const grid = document.getElementById('worker-grid');
+  if (workers && Object.keys(workers).length) {
+    grid.innerHTML = '';
+    for (const [wid, w] of Object.entries(workers)) {
+      if (wid === 'ds9') continue; // skip ds9 (v3 placeholder)
+      const dot = workerDot(w.abnormal, w.busy);
+      const label = wid === 'ds8' ? wid + ' 总管' : wid;
+      grid.innerHTML +=
+        '<div class="worker-item"><span class="worker-name">' + label + '</span><div style="display:flex;align-items:center;gap:6px"><span style="font-size:11px;color:#888">' + fmtAgo(w.last_active) + '</span><span class="worker-status ' + dot + '"></span></div></div>';
+    }
+  }
+
+  // Alerts
+  const al = data.alerts || {};
+  const oa = al.outbox_accumulation || {};
+  setBadge('alert-outbox', oa.alert ? '积压 ' + oa.pending_count : '正常', oa.alert ? 'err' : 'ok');
+  const fr = al.failed_recency || {};
+  setBadge('alert-failed', fr.alert ? '新增失败' : '无新增', fr.alert ? 'warn' : 'ok');
+  setText('alert-last-send', data.last_send_time ? fmtAgo(data.last_send_time) : '--');
+
+  // Reports
+  const reports = data.reports || [];
+  const rl = document.getElementById('report-list');
+  if (reports.length) {
+    rl.innerHTML = '';
+    reports.slice(0, 8).forEach(function(r) {
+      rl.innerHTML += '<div class="report-item"><span class="report-cat">' + (r.category || 'general') + '</span><span class="report-name">' + (r.name || '') + '</span></div>';
+    });
+  } else {
+    rl.innerHTML = '<div style="color:#555;font-size:13px">暂无报告</div>';
+  }
+}
+
+function poll() {
+  fetch('/api/status').then(function(r) { return r.json(); }).then(render).catch(function() {});
+}
+
+poll();
+setInterval(poll, 15000);
+</script>
+</body>
+</html>
