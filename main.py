@@ -1,8 +1,10 @@
-"""Jarvis Mobile Web — Railway read-only status panel."""
+"""Jarvis Mobile Web — read-only status panel."""
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import time
 from pathlib import Path
 
@@ -19,6 +21,23 @@ if not PUSH_TOKEN:
 
 latest: dict = {"status": "waiting", "updated_at": None, "_received_at": 0}
 
+# Privacy: scrub local paths from pushed data
+_PATH_PATTERN = re.compile(r"[A-Za-z]:\\(?:[^\\\s]+\\)*[^\\\s]*")
+
+
+def sanitize(data: dict) -> dict:
+    d = json.loads(json.dumps(data))
+    if "key" in d:
+        d["key"].pop("source", None)
+        d["key"].pop("mimo_source", None)
+    for w in d.get("workers", {}).values():
+        if "summary" in w and w["summary"]:
+            w["summary"] = _PATH_PATTERN.sub("[路径]", w["summary"])
+    if "reports" in d:
+        for r in d["reports"]:
+            r.pop("preview", None)
+    return d
+
 
 @app.post("/api/push")
 async def push_status(req: Request):
@@ -30,8 +49,9 @@ async def push_status(req: Request):
     now = time.time()
     body["_received_at"] = now
     body["status"] = "ok"
+    sanitized = sanitize(body)
     latest.clear()
-    latest.update(body)
+    latest.update(sanitized)
     return {"ok": True, "received_at": now}
 
 
