@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台湾甜妹语音测试 — 仿微信语音气泡</title>
+<style>
+:root {
+  --bg: #EDEDED;
+  --bubble: #95EC69;
+  --bubble-inner: #8FDA5E;
+  --text-dark: #1A1A1A;
+  --text-muted: #666;
+  --text-light: #999;
+  --primary: #07C160;
+  --primary-dark: #06AD56;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Microsoft YaHei', 'PingFang SC', -apple-system, sans-serif;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.page-title {
+  font-size: 18px;
+  color: var(--text-dark);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.page-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 32px;
+}
+
+.chat {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.voice-msg {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-end;
+  gap: 8px;
+}
+.voice-msg .avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  background: #07C160;
+  color: #fff;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bubble-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.voice-bubble {
+  background: var(--bubble);
+  border-radius: 8px 2px 8px 8px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  min-width: 200px;
+  max-width: 280px;
+  transition: background 0.15s;
+  position: relative;
+}
+.voice-bubble:hover {
+  background: #8EE35A;
+}
+.voice-bubble.playing {
+  background: #7FD64E;
+}
+
+.play-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: var(--text-dark);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s;
+}
+.play-btn:active {
+  transform: scale(0.92);
+}
+
+.waveform {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  flex: 1;
+}
+.waveform .bar {
+  width: 3px;
+  background: var(--text-dark);
+  border-radius: 2px;
+  opacity: 0.35;
+  transition: opacity 0.2s;
+}
+.waveform .bar.active {
+  opacity: 1;
+}
+.voice-bubble.playing .waveform .bar {
+  animation: bounce 0.5s ease-in-out infinite alternate;
+}
+.voice-bubble.playing .waveform .bar:nth-child(1) { animation-delay: 0s; }
+.voice-bubble.playing .waveform .bar:nth-child(2) { animation-delay: 0.08s; }
+.voice-bubble.playing .waveform .bar:nth-child(3) { animation-delay: 0.16s; }
+.voice-bubble.playing .waveform .bar:nth-child(4) { animation-delay: 0.04s; }
+.voice-bubble.playing .waveform .bar:nth-child(5) { animation-delay: 0.12s; }
+
+@keyframes bounce {
+  0% { transform: scaleY(0.4); }
+  100% { transform: scaleY(1.2); }
+}
+
+.duration {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.transcript {
+  font-size: 12px;
+  color: var(--text-light);
+  background: rgba(0,0,0,0.04);
+  padding: 6px 10px;
+  border-radius: 6px;
+  max-width: 260px;
+  line-height: 1.5;
+  text-align: right;
+}
+.transcript .highlight {
+  color: var(--primary-dark);
+  font-weight: 600;
+}
+
+.divider {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-light);
+  margin: 8px 0;
+}
+
+.selector {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.selector h3 {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+.selector .voice-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-bottom: 4px;
+}
+.selector .voice-option:hover {
+  background: #F5F5F5;
+}
+.selector .voice-option.active {
+  background: #E8F8EE;
+}
+.selector .voice-option input[type="radio"] {
+  accent-color: var(--primary);
+}
+.selector .voice-option .voice-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-dark);
+}
+.selector .voice-option .voice-desc {
+  font-size: 11px;
+  color: var(--text-light);
+}
+.selector .voice-option .voice-badge {
+  font-size: 10px;
+  background: var(--primary);
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: auto;
+}
+</style>
+</head>
+<body>
+
+<div class="page-title">台湾甜妹语音测试</div>
+<div class="page-sub">仿微信语音消息 · 点击播放</div>
+
+<div class="selector">
+  <h3>选择音色</h3>
+  <label class="voice-option active" id="opt-hsiaoyu">
+    <input type="radio" name="voice" value="hsiaoyu" checked>
+    <div>
+      <div class="voice-name">HsiaoYu (晓雨)</div>
+      <div class="voice-desc">zh-TW-HsiaoYuNeural · 台湾女声 · 甜美可爱</div>
+    </div>
+    <span class="voice-badge">推荐</span>
+  </label>
+  <label class="voice-option" id="opt-hsiaochen">
+    <input type="radio" name="voice" value="hsiaochen">
+    <div>
+      <div class="voice-name">HsiaoChen (晓蓁)</div>
+      <div class="voice-desc">zh-TW-HsiaoChenNeural · 台湾女声 · 温柔亲切</div>
+    </div>
+  </label>
+</div>
+
+<div class="chat">
+  <div class="divider">—— 模拟微信对话 ——</div>
+  <div class="voice-msg" id="voice-msg">
+    <div class="avatar">助手</div>
+    <div class="bubble-wrapper">
+      <div class="voice-bubble" id="voiceBubble" title="点击播放">
+        <button class="play-btn" id="playBtn">▶</button>
+        <div class="waveform" id="waveform"></div>
+        <span class="duration" id="durationDisplay">0:05</span>
+      </div>
+      <div class="transcript" id="transcript">
+        老板，<span class="highlight">我在呀</span>，有什么要我帮你做的吗？
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const waveformEl = document.getElementById('waveform');
+for (let i = 0; i < 5; i++) {
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  const heights = [14, 20, 10, 22, 16];
+  bar.style.height = heights[i] + 'px';
+  waveformEl.appendChild(bar);
+}
+
+const audio = new Audio();
+let isPlaying = false;
+
+const COS_BASE = 'https://jarvis-mobile-panel-1441194407.cos.ap-guangzhou.myqcloud.com';
+const voiceFiles = {
+  hsiaoyu: COS_BASE + '/hsiaoyu_final.mp3',
+  hsiaochen: COS_BASE + '/hsiaochen_test.mp3'
+};
+
+const voiceDurations = {
+  hsiaoyu: 5.3,
+  hsiaochen: 4.4
+};
+
+const voiceLabels = {
+  hsiaoyu: '0:05',
+  hsiaochen: '0:04'
+};
+
+let currentVoice = 'hsiaoyu';
+audio.src = voiceFiles[currentVoice];
+audio.crossOrigin = 'anonymous';
+
+const bubble = document.getElementById('voiceBubble');
+const playBtn = document.getElementById('playBtn');
+const durationDisplay = document.getElementById('durationDisplay');
+
+document.querySelectorAll('input[name="voice"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    if (isPlaying) {
+      audio.pause();
+      isPlaying = false;
+      bubble.classList.remove('playing');
+      playBtn.textContent = '▶';
+    }
+    currentVoice = radio.value;
+    audio.src = voiceFiles[currentVoice];
+    durationDisplay.textContent = voiceLabels[currentVoice];
+
+    document.querySelectorAll('.voice-option').forEach(el => el.classList.remove('active'));
+    document.getElementById('opt-' + currentVoice).classList.add('active');
+  });
+});
+
+function togglePlay() {
+  if (isPlaying) {
+    audio.pause();
+    audio.currentTime = 0;
+    isPlaying = false;
+    bubble.classList.remove('playing');
+    playBtn.textContent = '▶';
+  } else {
+    audio.play().catch(function(e) {
+      durationDisplay.textContent = '播放失败';
+      playBtn.textContent = '✕';
+      playBtn.style.background = '#EF5350';
+    });
+    isPlaying = true;
+    bubble.classList.add('playing');
+    playBtn.textContent = '■';
+  }
+}
+
+bubble.addEventListener('click', togglePlay);
+playBtn.addEventListener('click', function(e) { e.stopPropagation(); togglePlay(); });
+
+audio.addEventListener('ended', function() {
+  isPlaying = false;
+  bubble.classList.remove('playing');
+  playBtn.textContent = '▶';
+});
+
+audio.addEventListener('error', function() {
+  durationDisplay.textContent = '加载失败';
+  playBtn.textContent = '✕';
+  playBtn.style.background = '#EF5350';
+});
+</script>
+
+</body>
+</html>

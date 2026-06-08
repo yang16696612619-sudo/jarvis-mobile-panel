@@ -64,3 +64,9 @@ async def get_status():
 async def index():
     html = (HERE / "templates" / "index.html").read_text(encoding="utf-8")
     return HTMLResponse(html)
+
+
+@app.get("/voice-test")
+async def voice_test():
+    html = (HERE / "templates" / "voice_test.html").read_text(encoding="utf-8")
+    return HTMLResponse(html)
